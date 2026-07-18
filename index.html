@@ -2,42 +2,89 @@
 <html lang="id">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Database WPC-XLSMART - Permanent CV Storage</title>
+<title>Database WPC-XLSMART - Supabase Cloud</title>
 <script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>body{font-family:Inter,sans-serif}</style>
 </head>
 <body class="bg-slate-50 min-h-screen">
-<div class="max-w-[1450px] mx-auto p-4 md:p-6">
-<!-- Info Banner -->
-<div class="bg-blue-50 border border-blue-200 rounded-2xl p-4 mb-6 flex gap-3">
-<div class="text-blue-600 text-xl">💾</div>
-<div class="text-sm"><div class="font-semibold text-blue-900">Update: CV sekarang permanen!</div><div class="text-blue-700 text-xs mt-0.5">File CV yang kamu upload sekarang disimpan permanen di browser (IndexedDB). Walaupun refresh / tutup browser, file tetap ada dan bisa di-download. File tersimpan lokal di device ini, bukan di server.</div></div>
+<div class="max-w-[1500px] mx-auto p-4 md:p-6">
+
+<!-- Setup Banner -->
+<div id="setupBanner" class="bg-amber-50 border border-amber-200 rounded-2xl p-5 mb-6">
+<div class="flex gap-3">
+<div class="text-2xl">⚙️</div>
+<div class="flex-1">
+<h3 class="font-bold text-amber-900 text-sm">Setup Supabase - WAJIB SEKALI SAJA</h3>
+<p class="text-xs text-amber-800 mt-1">Project kamu: <b>outiwunhloveidpmlcuo</b> - URL: https://outiwunhloveidpmlcuo.supabase.co</p>
+<div class="mt-3 grid md:grid-cols-2 gap-3">
+<div class="bg-white rounded-xl p-3 border">
+<div class="text-xs font-semibold">1. Buat Table & Bucket - Copy SQL ini ke Supabase SQL Editor:</div>
+<pre class="mt-2 bg-slate-900 text-green-400 text-[11px] p-3 rounded-lg overflow-auto">
+-- Buat table
+create table if not exists wpc_manpower (
+  id bigint primary key,
+  nama text not null,
+  posisi text not null,
+  status text not null,
+  project text not null,
+  subcont text not null,
+  link_cv text,
+  file_name text,
+  file_url text,
+  catatan text,
+  tgl text,
+  created_at timestamp default now()
+);
+-- Enable RLS
+alter table wpc_manpower enable row level security;
+create policy "Allow all" on wpc_manpower for all using (true) with check (true);
+
+-- Buat storage bucket untuk CV
+insert into storage.buckets (id, name, public) values ('cv-files', 'cv-files', true) on conflict (id) do nothing;
+create policy "Public Access" on storage.objects for all using (bucket_id='cv-files') with check (bucket_id='cv-files');
+</pre>
+<button onclick="navigator.clipboard.writeText(this.previousElementSibling.innerText); alert('SQL copied!')" class="mt-2 text-xs bg-slate-900 text-white px-3 py-1.5 rounded-lg">Copy SQL</button>
+<a href="https://supabase.com/dashboard/project/outiwunhloveidpmlcuo/sql" target="_blank" class="ml-2 text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg inline-block">Buka SQL Editor</a>
+</div>
+<div class="bg-white rounded-xl p-3 border">
+<div class="text-xs font-semibold">2. Masukkan Anon Key Supabase kamu:</div>
+<p class="text-[11px] text-slate-500 mt-1">Buka Project Settings > API > anon public key</p>
+<input id="supaKey" type="password" placeholder="Paste anon key di sini (eyJ...)" class="w-full mt-2 border rounded-xl px-3 py-2.5 text-xs">
+<input id="supaUrl" type="hidden" value="https://outiwunhloveidpmlcuo.supabase.co">
+<button id="btnConnect" class="mt-2 w-full bg-emerald-600 text-white text-xs py-2.5 rounded-xl font-medium">Connect ke Supabase & Simpan</button>
+<div class="mt-2 text-[11px]"><a href="https://supabase.com/dashboard/project/outiwunhloveidpmlcuo/settings/api" target="_blank" class="text-blue-600 underline">Buka API Keys →</a></div>
+<div id="connStatus" class="mt-2 text-xs"></div>
+</div>
+</div>
+</div>
+</div>
 </div>
 
 <div class="bg-white rounded-2xl border shadow-sm p-6 mb-6 flex justify-between flex-wrap gap-4">
-<div><h1 class="text-2xl font-bold text-slate-900">Database WPC-XLSMART</h1><p class="text-sm text-slate-500">Manpower Management - Idle / Dedicated - Permanent Storage</p></div>
-<div class="flex gap-2"><div class="bg-amber-50 border border-amber-200 rounded-xl px-4 py-2 text-center"><div class="text-[10px] font-medium text-amber-700">IDLE</div><div id="cIdle" class="font-bold text-amber-900">0</div></div><div class="bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-2 text-center"><div class="text-[10px] font-medium text-emerald-700">DEDICATED</div><div id="cDed" class="font-bold text-emerald-900">0</div></div><div class="bg-slate-900 text-white rounded-xl px-5 py-2 text-center"><div class="text-[10px] opacity-60">TOTAL</div><div id="cTotal" class="font-bold">0</div></div><div id="storageInfo" class="bg-slate-50 border rounded-xl px-3 py-2 text-center"><div class="text-[10px] text-slate-500">STORAGE</div><div class="text-xs font-bold" id="storageSize">0 MB</div></div></div>
+<div><h1 class="text-2xl font-bold text-slate-900">Database WPC-XLSMART</h1><p class="text-sm text-slate-500 flex items-center gap-2"><span id="cloudStatus" class="w-2 h-2 bg-red-500 rounded-full"></span><span id="cloudText">Belum connect ke Supabase</span> - Project: outiwunhloveidpmlcuo</p></div>
+<div class="flex gap-2"><div class="bg-amber-50 border border-amber-200 rounded-xl px-4 py-2 text-center"><div class="text-[10px] font-medium text-amber-700">IDLE</div><div id="cIdle" class="font-bold text-amber-900">0</div></div><div class="bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-2 text-center"><div class="text-[10px] font-medium text-emerald-700">DEDICATED</div><div id="cDed" class="font-bold text-emerald-900">0</div></div><div class="bg-slate-900 text-white rounded-xl px-5 py-2 text-center"><div class="text-[10px] opacity-60">TOTAL</div><div id="cTotal" class="font-bold">0</div></div></div>
 </div>
 
 <div class="bg-white rounded-2xl border shadow-sm p-6 mb-6">
 <h2 id="formTitle" class="font-semibold text-slate-900 mb-4">Tambah Data Baru</h2>
 <form id="mainForm" class="grid md:grid-cols-3 gap-4">
-<div><label class="text-xs font-semibold text-slate-600">Nama *</label><input id="fNama" required class="w-full mt-1.5 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900" placeholder="Nama lengkap"></div>
-<div><label class="text-xs font-semibold text-slate-600">Posisi Terakhir *</label><input id="fPosisi" required class="w-full mt-1.5 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900" placeholder="Engineer, Rigger..."></div>
+<div><label class="text-xs font-semibold text-slate-600">Nama *</label><input id="fNama" required class="w-full mt-1.5 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm" placeholder="Nama lengkap"></div>
+<div><label class="text-xs font-semibold text-slate-600">Posisi Terakhir *</label><input id="fPosisi" required class="w-full mt-1.5 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm" placeholder="Engineer, Rigger..."></div>
 <div><label class="text-xs font-semibold text-slate-600">Current Status *</label><select id="fStatus" class="w-full mt-1.5 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm bg-white"><option value="Idle">Idle</option><option value="Dedicated">Dedicated</option></select></div>
 
-<div><label class="text-xs font-semibold text-slate-600">Project *</label><select id="fProjectType" class="w-full mt-1.5 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm bg-white"><option value="Blank">Blank</option><option value="Input">Input</option></select><input id="fProjectName" placeholder="Ketik nama project, ex: Project FTM" class="hidden w-full mt-2 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm"></div>
-<div><label class="text-xs font-semibold text-slate-600">Current Subcont *</label><input id="fSubcont" required class="w-full mt-1.5 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900" placeholder="PT ... / Vendor ..."></div>
-<div><label class="text-xs font-semibold text-slate-600">Link CV <span class="text-[10px] font-normal text-slate-400">(permanen)</span></label><div class="flex gap-1 mt-1.5 bg-slate-100 p-1 rounded-xl w-fit"><button type="button" id="tabLink" class="px-3 py-1.5 text-xs font-medium bg-white shadow rounded-lg">Link URL</button><button type="button" id="tabFile" class="px-3 py-1.5 text-xs font-medium rounded-lg">Upload File</button></div><input id="fLink" class="w-full mt-2 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm" placeholder="https://drive.google.com/..."><div id="fileDrop" class="hidden mt-2 border-2 border-dashed border-slate-200 rounded-xl p-4 text-center hover:border-slate-900 transition"><input type="file" id="fFile" accept=".pdf,.doc,.docx,.jpg,.png" class="hidden"><label for="fFile" class="cursor-pointer text-xs"><span class="font-semibold">Pilih file atau drag & drop</span><br><span class="text-[11px] text-slate-400">PDF, DOC, DOCX, JPG, PNG - max 10MB - disimpan permanen</span></label><div id="fileInfo" class="mt-2 text-xs font-medium text-slate-800"></div></div></div>
+<div><label class="text-xs font-semibold text-slate-600">Project *</label><select id="fProjectType" class="w-full mt-1.5 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm bg-white"><option value="Blank">Blank</option><option value="Input">Input</option></select><input id="fProjectName" placeholder="Ketik nama project" class="hidden w-full mt-2 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm"></div>
+<div><label class="text-xs font-semibold text-slate-600">Current Subcont *</label><input id="fSubcont" required class="w-full mt-1.5 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm" placeholder="PT ... / Vendor ..."></div>
+<div><label class="text-xs font-semibold text-slate-600">Link CV <span class="text-[10px] text-emerald-600">→ Cloud Storage</span></label><div class="flex gap-1 mt-1.5 bg-slate-100 p-1 rounded-xl w-fit"><button type="button" id="tabLink" class="px-3 py-1.5 text-xs font-medium bg-white shadow rounded-lg">Link URL</button><button type="button" id="tabFile" class="px-3 py-1.5 text-xs font-medium rounded-lg">Upload ke Supabase</button></div><input id="fLink" class="w-full mt-2 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm" placeholder="https://drive.google.com/..."><div id="fileDrop" class="hidden mt-2 border-2 border-dashed border-slate-200 rounded-xl p-4 text-center"><input type="file" id="fFile" accept=".pdf,.doc,.docx,.jpg,.png" class="hidden"><label for="fFile" class="cursor-pointer text-xs"><span class="font-semibold">Pilih file untuk upload ke Supabase Storage</span><br><span class="text-[11px] text-slate-400">Max 10MB - disimpan di bucket cv-files</span></label><div id="fileInfo" class="mt-2 text-xs font-medium"></div></div></div>
 
-<div class="md:col-span-3"><label class="text-xs font-semibold text-slate-600">Catatan</label><textarea id="fCatatan" rows="2" class="w-full mt-1.5 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm" placeholder="Optional..."></textarea></div>
-<div class="md:col-span-3 flex gap-2 pt-2"><button id="btnSimpan" class="bg-slate-900 hover:bg-black text-white px-6 py-2.5 rounded-xl text-sm font-medium">Simpan Data</button><button type="button" id="bCancel" class="hidden border border-slate-200 px-6 py-2.5 rounded-xl text-sm">Batal Edit</button><button type="button" id="bExport" class="ml-auto border border-slate-200 px-4 py-2.5 rounded-xl text-sm font-medium">Export CSV</button><button type="button" id="bClear" class="border border-red-200 text-red-600 px-4 py-2.5 rounded-xl text-sm">Hapus Semua</button></div>
+<div class="md:col-span-3"><label class="text-xs font-semibold text-slate-600">Catatan</label><textarea id="fCatatan" rows="2" class="w-full mt-1.5 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm"></textarea></div>
+<div class="md:col-span-3 flex gap-2 pt-2"><button id="btnSimpan" class="bg-slate-900 hover:bg-black text-white px-6 py-2.5 rounded-xl text-sm font-medium">Simpan ke Supabase Cloud</button><button type="button" id="bCancel" class="hidden border border-slate-200 px-6 py-2.5 rounded-xl text-sm">Batal Edit</button><button type="button" id="bExport" class="ml-auto border border-slate-200 px-4 py-2.5 rounded-xl text-sm">Export CSV</button><button type="button" id="bReload" class="border border-slate-200 px-4 py-2.5 rounded-xl text-sm">Reload Data</button></div>
 </form>
 </div>
 
 <div class="bg-white rounded-2xl border shadow-sm p-4 mb-4 flex flex-wrap gap-3">
-<input id="fSearch" placeholder="Cari nama / posisi / subcont / project..." class="border border-slate-200 rounded-xl px-4 py-2.5 text-sm w-full md:w-96 focus:outline-none focus:ring-2 focus:ring-slate-900">
+<input id="fSearch" placeholder="Cari nama / posisi / subcont / project..." class="border border-slate-200 rounded-xl px-4 py-2.5 text-sm w-full md:w-96">
 <select id="filterStatus" class="border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm bg-white"><option value="All">Semua Status</option><option value="Idle">Idle</option><option value="Dedicated">Dedicated</option></select>
 <select id="filterProject" class="border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm bg-white"><option value="All">Semua Project</option><option value="Blank">Blank</option></select>
 </div>
@@ -45,54 +92,62 @@
 <div class="bg-white rounded-2xl border shadow-sm overflow-hidden">
 <div class="overflow-auto">
 <table class="w-full text-sm"><thead class="bg-slate-50 text-[11px] font-semibold text-slate-500 uppercase tracking-wide"><tr><th class="px-4 py-3 text-left">No</th><th class="px-4 py-3 text-left">Nama</th><th class="px-4 py-3 text-left">Posisi</th><th class="px-4 py-3 text-left">Status</th><th class="px-4 py-3 text-left">Project</th><th class="px-4 py-3 text-left">Subcont</th><th class="px-4 py-3 text-left">CV</th><th class="px-4 py-3 text-left">Tgl</th><th class="px-4 py-3 text-left">Aksi</th></tr></thead><tbody id="tbody"></tbody></table>
-<div id="empty" class="py-20 text-center"><div class="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3 text-xl">📂</div><div class="font-semibold text-slate-900">Belum ada data WPC-XLSMART</div><div class="text-xs text-slate-500 mt-1">Database awal kosong</div></div>
+<div id="empty" class="py-20 text-center"><div class="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3 text-xl">☁️</div><div class="font-semibold text-slate-900">Belum ada data di Supabase</div><div class="text-xs text-slate-500 mt-1">Connect dulu, lalu tambahkan data pertama</div></div>
 </div>
 </div>
 
-<div class="mt-4 text-[11px] text-slate-400">Lokasi file: File CV disimpan di IndexedDB browser ini (bukan server). Path: Browser > IndexedDB > WPC_DB > cvFiles. File tetap ada walau refresh. Untuk backup permanen lintas device, gunakan Link Google Drive atau Export CSV.</div>
+<div class="mt-4 text-[11px] text-slate-400">Cloud: Supabase project outiwunhloveidpmlcuo | Table: wpc_manpower | Bucket: cv-files (public) | File CV tersimpan permanen di cloud dan bisa diakses dari device mana saja</div>
 </div>
 
 <script>
-// IndexedDB setup
-let db;
-const DB_NAME='WPC_DB', STORE='cvFiles';
-function openDB(){
- return new Promise((res,rej)=>{
-  const req=indexedDB.open(DB_NAME,1);
-  req.onupgradeneeded=e=>{ const d=e.target.result; if(!d.objectStoreNames.contains(STORE)) d.createObjectStore(STORE); };
-  req.onsuccess=e=>{ db=e.target.result; res(db); };
-  req.onerror=()=>rej(req.error);
- });
-}
-function saveFileToDB(id, file){
- return new Promise((res,rej)=>{
-  const tx=db.transaction(STORE,'readwrite'); tx.objectStore(STORE).put(file,id); tx.oncomplete=()=>res(); tx.onerror=()=>rej(tx.error);
- });
-}
-function getFileFromDB(id){
- return new Promise((res,rej)=>{
-  const tx=db.transaction(STORE,'readonly'); const req=tx.objectStore(STORE).get(id); req.onsuccess=()=>res(req.result); req.onerror=()=>rej(req.error);
- });
-}
-function deleteFileFromDB(id){
- return new Promise((res,rej)=>{
-  const tx=db.transaction(STORE,'readwrite'); tx.objectStore(STORE).delete(id); tx.oncomplete=()=>res(); tx.onerror=()=>rej(tx.error);
- });
-}
-
-let data=JSON.parse(localStorage.getItem('wpc_data')||'[]');
-let editId=null,cvMode='link',tempFile=null;
-
+let supabaseClient=null, data=[], editId=null, cvMode='link', tempFile=null;
 const $=id=>document.getElementById(id);
 const fmt=()=>new Date().toLocaleDateString('id-ID');
-function persist(){ localStorage.setItem('wpc_data', JSON.stringify(data)); updateStorageSize(); }
 
-function updateStorageSize(){
- let total=0; data.forEach(d=>{ if(d.fileSize) total+=d.fileSize; });
- $('storageSize').textContent = (total/1024/1024).toFixed(2)+' MB';
+// Load saved key
+const savedKey=localStorage.getItem('supa_anon_key');
+const savedUrl=localStorage.getItem('supa_url')||'https://outiwunhloveidpmlcuo.supabase.co';
+if(savedKey){ $('supaKey').value=savedKey; }
+$('supaUrl').value=savedUrl;
+
+function initSupabase(){
+ const url=$('supaUrl').value.trim();
+ const key=$('supaKey').value.trim();
+ if(!url||!key){ alert('Masukkan anon key dulu'); return false; }
+ supabaseClient = supabase.createClient(url, key);
+ localStorage.setItem('supa_anon_key', key);
+ localStorage.setItem('supa_url', url);
+ return true;
 }
 
-async function render(){
+async function testConnection(){
+ if(!supabaseClient && !initSupabase()) return;
+ $('connStatus').innerHTML='<span class="text-blue-600">Connecting...</span>';
+ try{
+  const {data, error} = await supabaseClient.from('wpc_manpower').select('count').limit(1);
+  if(error) throw error;
+  $('cloudStatus').className='w-2 h-2 bg-emerald-500 rounded-full animate-pulse';
+  $('cloudText').textContent='Connected to Supabase Cloud ☁️';
+  $('connStatus').innerHTML='<span class="text-emerald-600 font-medium">✅ Connected! Table wpc_manpower ditemukan.</span>';
+  $('setupBanner').classList.add('hidden');
+  loadData();
+ } catch(e){
+  $('connStatus').innerHTML='<span class="text-red-600">❌ Error: '+e.message+'<br>Pastikan kamu sudah jalankan SQL di atas!</span>';
+  $('cloudStatus').className='w-2 h-2 bg-red-500 rounded-full';
+ }
+}
+
+$('btnConnect').onclick=testConnection;
+
+async function loadData(){
+ if(!supabaseClient) return;
+ const {data: rows, error} = await supabaseClient.from('wpc_manpower').select('*').order('created_at',{ascending:false});
+ if(error){ console.error(error); alert('Gagal load: '+error.message); return; }
+ data=rows.map(r=>({id:r.id, nama:r.nama, posisi:r.posisi, status:r.status, project:r.project, subcont:r.subcont, link:r.link_cv, fileName:r.file_name, fileUrl:r.file_url, catatan:r.catatan, tgl:r.tgl}));
+ render();
+}
+
+function render(){
  const s=$('fSearch').value.toLowerCase(), fs=$('filterStatus').value, fp=$('filterProject').value;
  let filtered=data.filter(d=>(d.nama+d.posisi+d.subcont+d.project).toLowerCase().includes(s) && (fs==='All'||d.status===fs) && (fp==='All'||d.project===fp));
  $('tbody').innerHTML=''; $('empty').style.display=filtered.length?'none':'block';
@@ -101,83 +156,80 @@ async function render(){
  const sel=$('filterProject'); const cur=sel.value;
  sel.innerHTML='<option value="All">Semua Project</option><option value="Blank">Blank</option>'+projSet.map(p=>`<option value="${p}">${p}</option>`).join('');
  if([...sel.options].some(o=>o.value===cur)) sel.value=cur;
- updateStorageSize();
-
- for(let i=0;i<filtered.length;i++){
-  const d=filtered[i];
+ filtered.forEach((d,i)=>{
   const tr=document.createElement('tr'); tr.className='border-t border-slate-100 hover:bg-slate-50/70';
   let cvHtml='-';
-  if(d.link) cvHtml=`<a href="${d.link}" target="_blank" class="inline-flex px-2.5 py-1 bg-blue-50 text-blue-700 rounded-lg text-xs border border-blue-200">Link</a>`;
-  else if(d.fileId) cvHtml=`<button onclick="downloadCV(${d.id})" class="inline-flex px-2.5 py-1 bg-emerald-50 text-emerald-700 rounded-lg text-xs border border-emerald-200 hover:bg-emerald-100" title="${d.fileName}">${d.fileName.length>15?d.fileName.slice(0,15)+'...':d.fileName}</button>`;
-  
-  tr.innerHTML=`<td class="px-4 py-3.5 text-slate-600">${i+1}</td><td class="px-4 py-3.5 font-medium text-slate-900">${d.nama}</td><td class="px-4 py-3.5">${d.posisi}</td><td class="px-4 py-3.5"><span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${d.status==='Idle'?'bg-amber-100 text-amber-800 border border-amber-200':'bg-emerald-100 text-emerald-800 border border-emerald-200'}"><span class="w-1.5 h-1.5 rounded-full ${d.status==='Idle'?'bg-amber-500':'bg-emerald-500'}"></span>${d.status}</span></td><td class="px-4 py-3.5"><span class="px-2.5 py-1 rounded-full text-xs font-medium ${d.project==='Blank'?'bg-slate-100 text-slate-600':'bg-blue-50 text-blue-700 border border-blue-200'}">${d.project}</span></td><td class="px-4 py-3.5">${d.subcont}</td><td class="px-4 py-3.5">${cvHtml}</td><td class="px-4 py-3.5 text-xs text-slate-500">${d.tgl}</td><td class="px-4 py-3.5 flex gap-1"><button onclick="editData(${d.id})" class="border border-slate-200 rounded-lg px-2.5 py-1 text-xs hover:bg-white">Edit</button><button onclick="delData(${d.id})" class="border border-red-200 text-red-600 rounded-lg px-2.5 py-1 text-xs hover:bg-red-50">Hapus</button></td>`;
+  if(d.fileUrl) cvHtml=`<a href="${d.fileUrl}" target="_blank" class="inline-flex px-2.5 py-1 bg-emerald-50 text-emerald-700 rounded-lg text-xs border border-emerald-200">📄 ${d.fileName?d.fileName.slice(0,15):'Lihat CV'}</a>`;
+  else if(d.link) cvHtml=`<a href="${d.link}" target="_blank" class="inline-flex px-2.5 py-1 bg-blue-50 text-blue-700 rounded-lg text-xs border border-blue-200">🔗 Link</a>`;
+  tr.innerHTML=`<td class="px-4 py-3.5 text-slate-500">${i+1}</td><td class="px-4 py-3.5 font-medium text-slate-900">${d.nama}</td><td class="px-4 py-3.5">${d.posisi}</td><td class="px-4 py-3.5"><span class="px-2.5 py-1 rounded-full text-xs font-medium ${d.status==='Idle'?'bg-amber-100 text-amber-800 border border-amber-200':'bg-emerald-100 text-emerald-800 border border-emerald-200'}">${d.status}</span></td><td class="px-4 py-3.5"><span class="px-2.5 py-1 rounded-full text-xs ${d.project==='Blank'?'bg-slate-100':'bg-blue-50 text-blue-700 border border-blue-200'}">${d.project}</span></td><td class="px-4 py-3.5">${d.subcont}</td><td class="px-4 py-3.5">${cvHtml}</td><td class="px-4 py-3.5 text-xs text-slate-500">${d.tgl}</td><td class="px-4 py-3.5 flex gap-1"><button onclick="editData(${d.id})" class="border border-slate-200 rounded-lg px-2.5 py-1 text-xs">Edit</button><button onclick="delData(${d.id})" class="border border-red-200 text-red-600 rounded-lg px-2.5 py-1 text-xs">Hapus</button></td>`;
   $('tbody').appendChild(tr);
- }
+ });
 }
 
-window.downloadCV = async (id)=>{
- const d=data.find(x=>x.id===id); if(!d||!d.fileId) return;
- const file = await getFileFromDB(d.fileId);
- if(!file){ alert('File tidak ditemukan di storage'); return; }
- const url=URL.createObjectURL(file);
- const a=document.createElement('a'); a.href=url; a.download=d.fileName; a.click();
- setTimeout(()=>URL.revokeObjectURL(url),1000);
-};
-
-$('fProjectType').onchange=e=>{ if(e.target.value==='Input'){ $('fProjectName').classList.remove('hidden'); $('fProjectName').required=true; $('fProjectName').focus(); } else { $('fProjectName').classList.add('hidden'); $('fProjectName').required=false; } };
+$('fProjectType').onchange=e=>{ if(e.target.value==='Input'){ $('fProjectName').classList.remove('hidden'); $('fProjectName').required=true; } else { $('fProjectName').classList.add('hidden'); $('fProjectName').required=false; } };
 $('tabLink').onclick=()=>{ cvMode='link'; $('tabLink').className='px-3 py-1.5 text-xs font-medium bg-white shadow rounded-lg'; $('tabFile').className='px-3 py-1.5 text-xs font-medium rounded-lg text-slate-500'; $('fLink').classList.remove('hidden'); $('fileDrop').classList.add('hidden'); };
 $('tabFile').onclick=()=>{ cvMode='file'; $('tabFile').className='px-3 py-1.5 text-xs font-medium bg-white shadow rounded-lg'; $('tabLink').className='px-3 py-1.5 text-xs font-medium rounded-lg text-slate-500'; $('fLink').classList.add('hidden'); $('fileDrop').classList.remove('hidden'); };
-$('fFile').onchange=e=>{ 
- const f=e.target.files[0]; if(!f) return; 
- if(f.size>10*1024*1024){ alert('Max 10MB'); return; }
- tempFile=f; $('fileInfo').innerHTML=`<span class="text-emerald-700">✓ ${f.name} (${(f.size/1024).toFixed(0)} KB) - akan disimpan permanen</span>`;
-};
-
-// Drag & drop
-const drop=$('fileDrop');
-drop.addEventListener('dragover',e=>{e.preventDefault(); drop.classList.add('border-slate-900')});
-drop.addEventListener('dragleave',()=>drop.classList.remove('border-slate-900'));
-drop.addEventListener('drop',e=>{ e.preventDefault(); drop.classList.remove('border-slate-900'); const f=e.dataTransfer.files[0]; if(f){ if(f.size>10*1024*1024){alert('Max 10MB'); return;} tempFile=f; $('fileInfo').innerHTML=`<span class="text-emerald-700">✓ ${f.name} (${(f.size/1024).toFixed(0)} KB)</span>`; $('tabFile').click(); } });
+$('fFile').onchange=e=>{ const f=e.target.files[0]; if(!f) return; if(f.size>10*1024*1024){ alert('Max 10MB'); return; } tempFile=f; $('fileInfo').innerHTML=`<span class="text-emerald-700">✓ ${f.name} (${(f.size/1024).toFixed(0)} KB) siap upload ke Supabase</span>`; };
 
 $('mainForm').onsubmit=async e=>{
  e.preventDefault();
- $('btnSimpan').textContent='Menyimpan...'; $('btnSimpan').disabled=true;
+ if(!supabaseClient){ alert('Connect ke Supabase dulu!'); return; }
+ $('btnSimpan').textContent='Uploading...'; $('btnSimpan').disabled=true;
  try{
   const project=$('fProjectType').value==='Blank'?'Blank':$('fProjectName').value.trim();
   if($('fProjectType').value==='Input'&&!project){ alert('Nama project wajib'); return; }
-  let fileId=null, fileName=null, fileSize=0;
+  
+  let fileUrl=null, fileName=null;
   if(cvMode==='file'&&tempFile){
-   fileId='cv_'+Date.now();
-   await saveFileToDB(fileId, tempFile);
-   fileName=tempFile.name; fileSize=tempFile.size;
+   const filePath=`cv_${Date.now()}_${tempFile.name}`;
+   const {data: upData, error: upError} = await supabaseClient.storage.from('cv-files').upload(filePath, tempFile);
+   if(upError) throw upError;
+   const {data: pub} = supabaseClient.storage.from('cv-files').getPublicUrl(filePath);
+   fileUrl=pub.publicUrl; fileName=tempFile.name;
   }
-  const obj={id:editId??Date.now(),nama:$('fNama').value.trim(),posisi:$('fPosisi').value.trim(),status:$('fStatus').value,project,subcont:$('fSubcont').value.trim(),link:cvMode==='link'?$('fLink').value.trim():'',fileId,fileName,fileSize,catatan:$('fCatatan').value.trim(),tgl:editId? data.find(d=>d.id===editId).tgl : fmt()};
+  
+  const payload={
+   id: editId??Date.now(),
+   nama: $('fNama').value.trim(),
+   posisi: $('fPosisi').value.trim(),
+   status: $('fStatus').value,
+   project,
+   subcont: $('fSubcont').value.trim(),
+   link_cv: cvMode==='link'?$('fLink').value.trim():null,
+   file_name: fileName,
+   file_url: fileUrl,
+   catatan: $('fCatatan').value.trim(),
+   tgl: fmt()
+  };
   
   if(editId){
+   // keep old file if not uploading new
    const old=data.find(d=>d.id===editId);
-   if(old.fileId && fileId){ await deleteFileFromDB(old.fileId); }
-   if(!fileId){ obj.fileId=old.fileId; obj.fileName=old.fileName; obj.fileSize=old.fileSize; }
-   data=data.map(d=>d.id===editId?{...d,...obj}:d);
+   if(!fileUrl && old.fileUrl){ payload.file_url=old.fileUrl; payload.file_name=old.fileName; }
+   const {error} = await supabaseClient.from('wpc_manpower').update(payload).eq('id', editId);
+   if(error) throw error;
    editId=null; $('formTitle').textContent='Tambah Data Baru'; $('bCancel').classList.add('hidden');
-  } else data.push(obj);
+  } else {
+   const {error} = await supabaseClient.from('wpc_manpower').insert(payload);
+   if(error) throw error;
+  }
   
-  persist();
-  e.target.reset(); $('fProjectName').classList.add('hidden'); $('fileInfo').textContent=''; tempFile=null; $('tabLink').click(); render();
- } finally { $('btnSimpan').textContent='Simpan Data'; $('btnSimpan').disabled=false; }
+  e.target.reset(); $('fProjectName').classList.add('hidden'); $('fileInfo').textContent=''; tempFile=null; $('tabLink').click();
+  await loadData();
+  alert('✅ Berhasil disimpan ke Supabase Cloud!');
+ } catch(err){ alert('Error: '+err.message); console.error(err); }
+ finally { $('btnSimpan').textContent='Simpan ke Supabase Cloud'; $('btnSimpan').disabled=false; }
 };
 
-window.editData=id=>{ const d=data.find(x=>x.id===id); editId=id; $('fNama').value=d.nama; $('fPosisi').value=d.posisi; $('fStatus').value=d.status; $('fSubcont').value=d.subcont; $('fCatatan').value=d.catatan||''; if(d.project==='Blank'){ $('fProjectType').value='Blank'; $('fProjectName').classList.add('hidden'); } else { $('fProjectType').value='Input'; $('fProjectName').classList.remove('hidden'); $('fProjectName').value=d.project; } $('fLink').value=d.link||''; if(d.fileId){ $('fileInfo').textContent='File tersimpan: '+d.fileName+' (biarkan kosong jika tidak ganti)'; $('tabFile').click(); } $('formTitle').textContent='Edit Data - '+d.nama; $('bCancel').classList.remove('hidden'); window.scrollTo({top:0,behavior:'smooth'}); };
-window.delData=async id=>{ 
- if(!confirm('Hapus data ini? File CV juga akan terhapus permanen.')) return;
- const d=data.find(x=>x.id===id); if(d.fileId){ await deleteFileFromDB(d.fileId); }
- data=data.filter(d=>d.id!==id); persist(); render();
-};
-$('bCancel').onclick=()=>{ editId=null; $('mainForm').reset(); $('formTitle').textContent='Tambah Data Baru'; $('bCancel').classList.add('hidden'); $('fProjectName').classList.add('hidden'); $('fileInfo').textContent=''; };
+window.editData=id=>{ const d=data.find(x=>x.id===id); editId=id; $('fNama').value=d.nama; $('fPosisi').value=d.posisi; $('fStatus').value=d.status; $('fSubcont').value=d.subcont; $('fCatatan').value=d.catatan||''; if(d.project==='Blank'){ $('fProjectType').value='Blank'; $('fProjectName').classList.add('hidden'); } else { $('fProjectType').value='Input'; $('fProjectName').classList.remove('hidden'); $('fProjectName').value=d.project; } $('fLink').value=d.link||''; $('formTitle').textContent='Edit Data - '+d.nama; $('bCancel').classList.remove('hidden'); scrollTo(0,0); };
+window.delData=async id=>{ if(!confirm('Hapus data ini dari Supabase? File CV juga akan terhapus.')) return; try{ const d=data.find(x=>x.id===id); if(d.fileUrl){ const path=d.fileUrl.split('/cv-files/')[1]; if(path) await supabaseClient.storage.from('cv-files').remove([path]); } await supabaseClient.from('wpc_manpower').delete().eq('id', id); await loadData(); } catch(e){ alert('Error: '+e.message); } };
+$('bCancel').onclick=()=>{ editId=null; $('mainForm').reset(); $('formTitle').textContent='Tambah Data Baru'; $('bCancel').classList.add('hidden'); $('fProjectName').classList.add('hidden'); };
 $('fSearch').oninput=render; $('filterStatus').onchange=render; $('filterProject').onchange=render;
-$('bExport').onclick=()=>{ if(!data.length){ alert('Database masih kosong'); return; } const h=['No','Nama','Posisi Terakhir','Current Status','Project','Current Subcont','Link CV / File Name','Tgl Input','Catatan']; const rows=data.map((d,i)=>[i+1,d.nama,d.posisi,d.status,d.project,d.subcont,d.link||d.fileName||'',d.tgl,d.catatan||'']); const csv=[h,...rows].map(r=>r.map(v=>`"${(v+'').replace(/"/g,'""')}"`).join(',')).join('\n'); const b=new Blob([csv],{type:'text/csv'}); const u=URL.createObjectURL(b); const a=document.createElement('a'); a.href=u; a.download='Database_WPC-XLSMART.csv'; a.click(); };
-$('bClear').onclick=async ()=>{ if(!confirm('Hapus SEMUA data dan file CV permanen?')) return; for(const d of data){ if(d.fileId) await deleteFileFromDB(d.fileId); } data=[]; persist(); render(); };
+$('bExport').onclick=()=>{ if(!data.length){ alert('Kosong'); return; } const h=['No','Nama','Posisi','Status','Project','Subcont','CV','Tgl','Catatan']; const rows=data.map((d,i)=>[i+1,d.nama,d.posisi,d.status,d.project,d.subcont,d.fileUrl||d.link||'',d.tgl,d.catatan||'']); const csv=[h,...rows].map(r=>r.map(v=>`"${(v+'').replace(/"/g,'""')}"`).join(',')).join('\n'); const b=new Blob([csv],{type:'text/csv'}); const u=URL.createObjectURL(b); const a=document.createElement('a'); a.href=u; a.download='Database_WPC-XLSMART_Supabase.csv'; a.click(); };
+$('bReload').onclick=loadData;
 
-openDB().then(()=>{ render(); });
+// Auto connect if key saved
+if(savedKey){ initSupabase(); testConnection(); }
 </script>
 </body>
 </html>
